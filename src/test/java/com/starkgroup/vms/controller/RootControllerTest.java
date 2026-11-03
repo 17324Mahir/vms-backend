@@ -30,3 +30,4 @@ class RootControllerTest {
                 .andExpect(jsonPath("$.endpoints.register", is("POST /api/auth/register")));
     }
 }
+

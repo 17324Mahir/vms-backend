@@ -94,3 +94,4 @@ public class User {
         return Objects.hash(email != null ? email.toLowerCase() : null);
     }
 }
+

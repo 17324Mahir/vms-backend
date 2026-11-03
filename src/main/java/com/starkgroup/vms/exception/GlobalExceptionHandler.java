@@ -153,6 +153,30 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex, HttpServletRequest request) {
+        String msg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        String code = "DATA_INTEGRITY_VIOLATION";
+        String message = "A conflict occurred while persisting the record.";
+
+        if (msg.contains("uk_users_email") || msg.contains("users")) {
+            code = "DUPLICATE_EMAIL";
+            message = "An account with this email address already exists.";
+        } else if (msg.contains("uk_vehicles_number") || msg.contains("vehicles")) {
+            code = "DUPLICATE_VEHICLE_NUMBER";
+            message = "Vehicle with this vehicle number already exists.";
+        }
+
+        ErrorResponse error = ErrorResponse.of(
+                HttpStatus.CONFLICT.value(),
+                code,
+                message,
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(
             InvalidCredentialsException ex, HttpServletRequest request) {
