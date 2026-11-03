@@ -90,7 +90,19 @@ CORS_ALLOWED_ORIGINS="http://localhost:5173" \
 
 ---
 
-## 6. Associated Frontend Repository
+## 6. Docker & Render Deployment
+
+The backend includes a multi-stage `Dockerfile` and a declarative Render blueprint (`render.yaml`).
+- Built with Java 21 LTS (`eclipse-temurin:21-jre-jammy`).
+- Runs as a non-root system user (`appuser:1001`).
+- Binds dynamically to Render's allocated `$PORT` on `0.0.0.0`.
+- Health check: `/actuator/health`.
+
+For full deployment steps, database setup, and environment variable configuration on Render, see [`docs/render-deployment.md`](docs/render-deployment.md).
+
+---
+
+## 7. Associated Frontend Repository
 
 The Flutter Web frontend is maintained in:
 - **vms-frontend:** [https://github.com/17324Mahir/vms-frontend](https://github.com/17324Mahir/vms-frontend)

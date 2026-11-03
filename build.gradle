@@ -42,6 +42,14 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
+tasks.named('bootJar') {
+    archiveFileName = 'app.jar'
+}
+
+tasks.named('jar') {
+    enabled = false
+}
+
 tasks.register('hashPassword', JavaExec) {
     group = 'security'
     description = 'Prompts for a password on stdin and outputs its BCrypt hash.'
