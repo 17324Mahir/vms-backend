@@ -2,21 +2,23 @@ package com.starkgroup.vms.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.starkgroup.vms.domain.User;
 import com.starkgroup.vms.domain.VehicleStatus;
 import com.starkgroup.vms.dto.CreateVehicleRequest;
 import com.starkgroup.vms.dto.LoginRequest;
 import com.starkgroup.vms.dto.UpdateVehicleRequest;
+import com.starkgroup.vms.repository.UserRepository;
 import com.starkgroup.vms.service.JwtService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -64,10 +66,15 @@ class VehicleApiIntegrationTest {
     @Autowired
     private JwtService jwtService;
 
-    @Value("${app.security.course-user.email:test@starkgroup.test}")
-    private String testUserEmail;
+    @Autowired
+    private UserRepository userRepository;
 
-    // Course user test password configured in application.properties
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private final String testUserEmail = "test@starkgroup.test";
+
+    // Synthetic test password for isolated integration testing
     private static final String TEST_USER_PASSWORD = "SyntheticTestPassword@123";
 
     private String authToken;
@@ -75,6 +82,10 @@ class VehicleApiIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        // Ensure synthetic test user exists in repository for real auth journey
+        if (!userRepository.existsByEmailIgnoreCase(testUserEmail)) {
+            userRepository.save(new User("Test Admin", testUserEmail, passwordEncoder.encode(TEST_USER_PASSWORD), "USER"));
+        }
         // Authenticate via the real login endpoint to exercise the real auth journey
         authToken = obtainAuthToken();
     }
@@ -89,6 +100,11 @@ class VehicleApiIntegrationTest {
             }
         }
         createdVehicleIds.clear();
+
+        try {
+            userRepository.findByEmailIgnoreCase(testUserEmail).ifPresent(userRepository::delete);
+        } catch (Exception ignored) {
+        }
     }
 
     /**

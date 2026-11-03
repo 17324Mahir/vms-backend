@@ -1,21 +1,28 @@
 package com.starkgroup.vms.service;
 
+import com.starkgroup.vms.domain.User;
 import com.starkgroup.vms.dto.LoginRequest;
 import com.starkgroup.vms.dto.LoginResponse;
 import com.starkgroup.vms.exception.InvalidCredentialsException;
+import com.starkgroup.vms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 class AuthSecurityTest {
 
     private PasswordEncoder passwordEncoder;
     private JwtService jwtService;
+    private UserRepository userRepository;
     private AuthService authService;
 
     private static final String TEST_EMAIL = "learner@example.test";
@@ -34,7 +41,12 @@ class AuthSecurityTest {
         ReflectionTestUtils.setField(jwtService, "audience", "stark-vms-frontend");
         jwtService.init();
 
-        authService = new AuthServiceImpl(TEST_EMAIL, passwordHash, passwordEncoder, jwtService);
+        userRepository = Mockito.mock(UserRepository.class);
+        final User mockUser = new User("Learner", TEST_EMAIL, passwordHash, "USER");
+        when(userRepository.findByEmailIgnoreCase(TEST_EMAIL)).thenReturn(Optional.of(mockUser));
+        when(userRepository.findByEmailIgnoreCase("LEARNER@EXAMPLE.TEST")).thenReturn(Optional.of(mockUser));
+
+        authService = new AuthServiceImpl(passwordEncoder, jwtService, userRepository);
     }
 
     @Test

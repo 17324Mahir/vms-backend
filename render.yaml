@@ -21,9 +21,5 @@ services:
         value: stark-vms-backend
       - key: JWT_AUDIENCE
         value: stark-vms-frontend
-      - key: COURSE_USER_EMAIL
-        sync: false
-      - key: COURSE_USER_PASSWORD_HASH
-        sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false

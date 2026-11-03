@@ -11,7 +11,6 @@ import com.starkgroup.vms.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +20,7 @@ import java.util.Optional;
 
 /**
  * Implementation of AuthService managing user registration, authentication, and JWT token issuance.
+ * All credentials are authenticated strictly against the database user repository.
  */
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -30,29 +30,15 @@ public class AuthServiceImpl implements AuthService {
     private static final String DUMMY_BCRYPT_HASH =
             "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi";
 
-    private final String courseUserEmail;
-    private final String courseUserPasswordHash;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final UserRepository userRepository;
 
-    public AuthServiceImpl(
-            @Value("${app.security.course-user.email:}") String courseUserEmail,
-            @Value("${app.security.course-user.password-hash:}") String courseUserPasswordHash,
-            PasswordEncoder passwordEncoder,
-            JwtService jwtService) {
-        this(courseUserEmail, courseUserPasswordHash, passwordEncoder, jwtService, null);
-    }
-
     @Autowired
     public AuthServiceImpl(
-            @Value("${app.security.course-user.email:}") String courseUserEmail,
-            @Value("${app.security.course-user.password-hash:}") String courseUserPasswordHash,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            @Autowired(required = false) UserRepository userRepository) {
-        this.courseUserEmail = courseUserEmail != null ? courseUserEmail.trim() : "";
-        this.courseUserPasswordHash = courseUserPasswordHash != null ? courseUserPasswordHash.trim() : "";
+            UserRepository userRepository) {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.userRepository = userRepository;
@@ -67,11 +53,6 @@ public class AuthServiceImpl implements AuthService {
 
         if (rawEmail.isEmpty() || rawName.isEmpty() || rawPassword.isEmpty()) {
             throw new IllegalArgumentException("Name, email, and password are required.");
-        }
-
-        // Check if email conflicts with course user
-        if (!courseUserEmail.isEmpty() && courseUserEmail.equalsIgnoreCase(rawEmail)) {
-            throw new DuplicateEmailException("An account with this email address already exists.");
         }
 
         // Check if email conflicts with registered users in database
@@ -107,7 +88,7 @@ public class AuthServiceImpl implements AuthService {
                 ? request.email().trim().toLowerCase(Locale.ROOT)
                 : "";
 
-        // 1. First check dynamic users database if repository is available
+        // Verify user against database user repository
         if (userRepository != null) {
             Optional<User> userOpt = userRepository.findByEmailIgnoreCase(inputEmail);
             if (userOpt.isPresent()) {
@@ -127,26 +108,7 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
-        // 2. Fall back to designated course user
-        if (!courseUserEmail.isEmpty() && !courseUserPasswordHash.isEmpty()) {
-            final String configuredEmail = courseUserEmail.toLowerCase(Locale.ROOT);
-            if (configuredEmail.equals(inputEmail)) {
-                if (passwordEncoder.matches(request.password(), courseUserPasswordHash)) {
-                    final String accessToken = jwtService.generateToken(courseUserEmail);
-                    final UserSummaryDto userSummary = new UserSummaryDto(courseUserEmail);
-                    return new LoginResponse(
-                            accessToken,
-                            "Bearer",
-                            jwtService.getExpirationSeconds(),
-                            userSummary
-                    );
-                } else {
-                    throw new InvalidCredentialsException("Email or password is incorrect.");
-                }
-            }
-        }
-
-        // 3. Fallback dummy hash comparison to mitigate timing attacks
+        // Timing-attack mitigation: compare with dummy hash when user is not found
         passwordEncoder.matches(request.password(), DUMMY_BCRYPT_HASH);
         throw new InvalidCredentialsException("Email or password is incorrect.");
     }
