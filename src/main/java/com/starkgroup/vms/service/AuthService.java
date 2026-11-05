@@ -1,5 +1,6 @@
 package com.starkgroup.vms.service;
 
+import com.starkgroup.vms.dto.CheckEmailResponse;
 import com.starkgroup.vms.dto.LoginRequest;
 import com.starkgroup.vms.dto.LoginResponse;
 import com.starkgroup.vms.dto.RegisterRequest;
@@ -11,4 +12,6 @@ public interface AuthService {
     LoginResponse login(LoginRequest request);
 
     LoginResponse register(RegisterRequest request);
+
+    CheckEmailResponse checkEmail(String email);
 }

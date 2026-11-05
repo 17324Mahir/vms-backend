@@ -1,6 +1,7 @@
 package com.starkgroup.vms.service;
 
 import com.starkgroup.vms.domain.User;
+import com.starkgroup.vms.dto.CheckEmailResponse;
 import com.starkgroup.vms.dto.LoginRequest;
 import com.starkgroup.vms.dto.LoginResponse;
 import com.starkgroup.vms.dto.RegisterRequest;
@@ -111,5 +112,20 @@ public class AuthServiceImpl implements AuthService {
         // Timing-attack mitigation: compare with dummy hash when user is not found
         passwordEncoder.matches(request.password(), DUMMY_BCRYPT_HASH);
         throw new InvalidCredentialsException("Email or password is incorrect.");
+    }
+
+    @Override
+    public CheckEmailResponse checkEmail(String email) {
+        final String rawEmail = email != null ? email.trim().toLowerCase(Locale.ROOT) : "";
+        if (rawEmail.isEmpty()) {
+            return new CheckEmailResponse("", false, "Please enter an email address.");
+        }
+
+        final boolean exists = userRepository != null && userRepository.existsByEmailIgnoreCase(rawEmail);
+        final String message = exists
+                ? "An account with this email address already exists."
+                : "Email address is available for registration.";
+
+        return new CheckEmailResponse(rawEmail, exists, message);
     }
 }

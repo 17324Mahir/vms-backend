@@ -134,4 +134,20 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken", is("mock.registered.token")))
                 .andExpect(jsonPath("$.user.email", is("tony@starkgroup.test")));
     }
+
+    @Test
+    @DisplayName("GET /api/auth/check-email returns 200 with availability status")
+    void checkEmail_returns200WithAvailability() throws Exception {
+        com.starkgroup.vms.dto.CheckEmailResponse response =
+                new com.starkgroup.vms.dto.CheckEmailResponse("tony@starkgroup.test", true, "An account with this email address already exists.");
+
+        when(authService.checkEmail("tony@starkgroup.test")).thenReturn(response);
+
+        mockMvc.perform(get("/api/auth/check-email")
+                        .param("email", "tony@starkgroup.test"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(jsonPath("$.exists", is(true)))
+                .andExpect(jsonPath("$.email", is("tony@starkgroup.test")));
+    }
 }
