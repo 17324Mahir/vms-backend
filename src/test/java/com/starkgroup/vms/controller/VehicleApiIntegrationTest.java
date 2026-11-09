@@ -564,4 +564,43 @@ class VehicleApiIntegrationTest {
                 .andExpect(jsonPath("$.code", is("INVALID_CREDENTIALS")))
                 .andExpect(jsonPath("$.message", is("Email or password is incorrect.")));
     }
+
+    @Test
+    @DisplayName("User Fleet Isolation: New user sees 0 vehicles while testcase user sees default vehicles")
+    void userIsolation_newUserSeesEmptyFleetAndTestUserSeesDefaultFleet() throws Exception {
+        // 1. Register a new user
+        String newUserEmail = "newuser." + System.currentTimeMillis() + "@starkgroup.test";
+        com.starkgroup.vms.dto.RegisterRequest registerRequest =
+                new com.starkgroup.vms.dto.RegisterRequest("New Tester", newUserEmail, "Password123!");
+
+        MvcResult regResult = mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        JsonNode regNode = objectMapper.readTree(regResult.getResponse().getContentAsString());
+        String newUserToken = "Bearer " + regNode.get("accessToken").asText();
+
+        // 2. New user queries vehicles -> MUST be empty []
+        mockMvc.perform(get("/api/vehicles")
+                        .header("Authorization", newUserToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // 3. New user queries paginated vehicles -> content MUST be empty []
+        mockMvc.perform(get("/vehicles?page=0&size=10")
+                        .header("Authorization", newUserToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements", is(0)));
+
+        // 4. Testcase user queries vehicles -> sees the seeded vehicles
+        String testUserToken = obtainAuthToken();
+        mockMvc.perform(get("/api/vehicles")
+                        .header("Authorization", testUserToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", not(empty())));
+    }
 }
+

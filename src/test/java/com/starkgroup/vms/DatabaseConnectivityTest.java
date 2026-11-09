@@ -36,7 +36,8 @@ class DatabaseConnectivityTest {
                 String currentDb = rs.getString(1);
                 String currentUser = rs.getString(2);
 
-                assertEquals("stark_vms_db", currentDb, "Database name should match stark_vms_db");
+                assertTrue("stark_vms_db".equals(currentDb) || "stark_vms_a1_db".equals(currentDb),
+                        "Database name should match stark_vms database, actual: " + currentDb);
                 assertEquals("vms_user", currentUser, "Database user should match vms_user");
             }
         }

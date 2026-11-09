@@ -7,6 +7,7 @@ import com.starkgroup.vms.dto.VehicleResponse;
 import com.starkgroup.vms.exception.DuplicateVehicleNumberException;
 import com.starkgroup.vms.exception.VehicleNotFoundException;
 import com.starkgroup.vms.repository.VehicleRepository;
+import com.starkgroup.vms.util.SecurityUtils;
 import com.starkgroup.vms.util.VehicleNumberNormalizer;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -14,6 +15,8 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -48,13 +51,16 @@ public class VehicleServiceImpl implements VehicleService {
         validate(request);
 
         String normalizedNumber = VehicleNumberNormalizer.normalize(request.vehicleNumber());
+        String currentUserEmail = SecurityUtils.getCurrentUserEmail();
 
-        // 1. Business-layer duplicate check
-        if (vehicleRepository.existsByVehicleNumber(normalizedNumber)) {
+        // 1. Duplicate check (scoped to user, with global fallback)
+        if (vehicleRepository.existsByVehicleNumberAndUserEmailIgnoreCase(normalizedNumber, currentUserEmail)
+                || vehicleRepository.existsByVehicleNumber(normalizedNumber)) {
             throw new DuplicateVehicleNumberException(DUPLICATE_VEHICLE_NUMBER_MESSAGE);
         }
 
         Vehicle vehicle = new Vehicle();
+        vehicle.setUserEmail(currentUserEmail);
         vehicle.setVehicleNumber(normalizedNumber);
         vehicle.setCompany(request.company().trim());
         vehicle.setType(request.type().trim());
@@ -80,7 +86,9 @@ public class VehicleServiceImpl implements VehicleService {
         if (id == null) {
             throw new VehicleNotFoundException("Vehicle ID must not be null");
         }
-        Vehicle vehicle = vehicleRepository.findById(id)
+        String currentUserEmail = SecurityUtils.getCurrentUserEmail();
+        Vehicle vehicle = vehicleRepository.findByIdAndUserEmailIgnoreCase(id, currentUserEmail)
+                .or(() -> vehicleRepository.findById(id).filter(v -> v.getUserEmail() == null || v.getUserEmail().equalsIgnoreCase(currentUserEmail)))
                 .orElseThrow(() -> new VehicleNotFoundException(id));
         return VehicleResponse.from(vehicle);
     }
@@ -88,16 +96,34 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     @Transactional(readOnly = true)
     public List<VehicleResponse> getAllVehicles() {
-        return vehicleRepository.findAll().stream()
+        String currentUserEmail = SecurityUtils.getCurrentUserEmail();
+        List<Vehicle> list = vehicleRepository.findAllByUserEmailIgnoreCase(currentUserEmail);
+        if (list.isEmpty() && SecurityUtils.DEFAULT_USER_EMAIL.equalsIgnoreCase(currentUserEmail)) {
+            List<Vehicle> all = vehicleRepository.findAll();
+            if (!all.isEmpty()) {
+                return all.stream()
+                        .filter(v -> v.getUserEmail() == null || v.getUserEmail().equalsIgnoreCase(currentUserEmail))
+                        .map(VehicleResponse::from)
+                        .toList();
+            }
+        }
+        return list.stream()
                 .map(VehicleResponse::from)
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<VehicleResponse> getVehicles(org.springframework.data.domain.Pageable pageable) {
-        return vehicleRepository.findAll(pageable)
-                .map(VehicleResponse::from);
+    public Page<VehicleResponse> getVehicles(Pageable pageable) {
+        String currentUserEmail = SecurityUtils.getCurrentUserEmail();
+        Page<Vehicle> page = vehicleRepository.findAllByUserEmailIgnoreCase(currentUserEmail, pageable);
+        if ((page == null || page.isEmpty()) && SecurityUtils.DEFAULT_USER_EMAIL.equalsIgnoreCase(currentUserEmail)) {
+            Page<Vehicle> all = vehicleRepository.findAll(pageable);
+            if (all != null && !all.isEmpty()) {
+                return all.map(VehicleResponse::from);
+            }
+        }
+        return page != null ? page.map(VehicleResponse::from) : Page.empty(pageable);
     }
 
     @Override
@@ -107,19 +133,22 @@ public class VehicleServiceImpl implements VehicleService {
             throw new VehicleNotFoundException("Vehicle ID must not be null");
         }
 
-        Vehicle existing = vehicleRepository.findById(id)
+        String currentUserEmail = SecurityUtils.getCurrentUserEmail();
+        Vehicle existing = vehicleRepository.findByIdAndUserEmailIgnoreCase(id, currentUserEmail)
+                .or(() -> vehicleRepository.findById(id).filter(v -> v.getUserEmail() == null || v.getUserEmail().equalsIgnoreCase(currentUserEmail)))
                 .orElseThrow(() -> new VehicleNotFoundException(id));
 
         validate(request);
 
         String normalizedNumber = VehicleNumberNormalizer.normalize(request.vehicleNumber());
 
-        // 1. Business-layer duplicate check (excluding the current vehicle)
-        if (vehicleRepository.existsByVehicleNumberAndIdNot(normalizedNumber, id)) {
+        // 1. User-scoped duplicate check (excluding the current vehicle)
+        if (vehicleRepository.existsByVehicleNumberAndUserEmailIgnoreCaseAndIdNot(normalizedNumber, currentUserEmail, id)
+                || vehicleRepository.existsByVehicleNumberAndIdNot(normalizedNumber, id)) {
             throw new DuplicateVehicleNumberException(DUPLICATE_VEHICLE_NUMBER_MESSAGE);
         }
 
-        // Update existing row while preserving original ID
+        // Update existing row while preserving original ID and owner
         existing.setVehicleNumber(normalizedNumber);
         existing.setCompany(request.company().trim());
         existing.setType(request.type().trim());
@@ -129,8 +158,8 @@ public class VehicleServiceImpl implements VehicleService {
 
         // 2. Database-level persistence and unique constraint handling
         try {
-            Vehicle updated = vehicleRepository.saveAndFlush(existing);
-            return VehicleResponse.from(updated);
+            Vehicle saved = vehicleRepository.saveAndFlush(existing);
+            return VehicleResponse.from(saved);
         } catch (DataIntegrityViolationException ex) {
             if (isVehicleNumberUniqueConstraintViolation(ex)) {
                 throw new DuplicateVehicleNumberException(DUPLICATE_VEHICLE_NUMBER_MESSAGE, ex);
@@ -146,16 +175,15 @@ public class VehicleServiceImpl implements VehicleService {
             throw new VehicleNotFoundException("Vehicle ID must not be null");
         }
 
-        Vehicle vehicle = vehicleRepository.findById(id)
+        String currentUserEmail = SecurityUtils.getCurrentUserEmail();
+        Vehicle vehicle = vehicleRepository.findByIdAndUserEmailIgnoreCase(id, currentUserEmail)
+                .or(() -> vehicleRepository.findById(id).filter(v -> v.getUserEmail() == null || v.getUserEmail().equalsIgnoreCase(currentUserEmail)))
                 .orElseThrow(() -> new VehicleNotFoundException(id));
 
         vehicleRepository.delete(vehicle);
     }
 
     private <T> void validate(T object) {
-        if (object == null) {
-            throw new IllegalArgumentException("Request body must not be null");
-        }
         Set<ConstraintViolation<T>> violations = validator.validate(object);
         if (!violations.isEmpty()) {
             throw new ConstraintViolationException(violations);
@@ -163,26 +191,19 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     private boolean isVehicleNumberUniqueConstraintViolation(DataIntegrityViolationException ex) {
-        Throwable current = ex;
-        while (current != null) {
-            if (current instanceof org.hibernate.exception.ConstraintViolationException cve) {
-                String constraintName = cve.getConstraintName();
-                if (constraintName != null && matchesConstraint(constraintName)) {
+        Throwable cause = ex;
+        while (cause != null) {
+            String message = cause.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(Locale.ROOT);
+                if (lower.contains("uk_vehicles_user_vehicle_number") ||
+                    lower.contains("uk_vehicles_vehicle_number") ||
+                    lower.contains("unique constraint") && lower.contains("vehicle_number")) {
                     return true;
                 }
             }
-            String msg = current.getMessage();
-            if (msg != null && matchesConstraint(msg)) {
-                return true;
-            }
-            current = current.getCause();
+            cause = cause.getCause();
         }
         return false;
-    }
-
-    private boolean matchesConstraint(String text) {
-        String lower = text.toLowerCase(Locale.ROOT);
-        return lower.contains("uk_vehicles_vehicle_number")
-                || (lower.contains("vehicle_number") && lower.contains("unique"));
     }
 }
