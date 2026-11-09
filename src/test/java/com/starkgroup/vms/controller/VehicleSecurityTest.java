@@ -53,6 +53,18 @@ class VehicleSecurityTest {
     }
 
     @Test
+    @DisplayName("GET /vehicles without token returns 401 Unauthorized with JSON ErrorResponse")
+    void getVehiclesRoot_withoutToken_returns401() throws Exception {
+        mockMvc.perform(get("/vehicles"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("Content-Type", containsString("application/json")))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.code", is("UNAUTHORIZED")))
+                .andExpect(jsonPath("$.message", containsString("Full authentication is required")));
+    }
+
+    @Test
     @DisplayName("POST /api/vehicles without token returns 401 Unauthorized")
     void postVehicle_withoutToken_returns401() throws Exception {
         mockMvc.perform(post("/api/vehicles")

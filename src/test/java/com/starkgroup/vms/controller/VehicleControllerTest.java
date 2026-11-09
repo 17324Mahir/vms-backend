@@ -174,6 +174,43 @@ class VehicleControllerTest {
     }
 
     @Test
+    @DisplayName("GET /vehicles?page=0&size=10 returns 200 OK with Spring Page JSON")
+    void getVehicles_paginated_returnsSpringPageJson() throws Exception {
+        List<VehicleResponse> responses = List.of(
+                new VehicleResponse(1L, "SG-1001", "Stark Industries", "Sedan", "Tesla", "Model S", VehicleStatus.ACTIVE),
+                new VehicleResponse(2L, "SG-1002", "Stark Logistics", "Van", "Ford", "Transit", VehicleStatus.MAINTENANCE)
+        );
+        org.springframework.data.domain.Page<VehicleResponse> page =
+                new org.springframework.data.domain.PageImpl<>(responses, org.springframework.data.domain.PageRequest.of(0, 10), 2);
+
+        when(vehicleService.getVehicles(any())).thenReturn(page);
+
+        mockMvc.perform(get("/vehicles?page=0&size=10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.number", is(0)))
+                .andExpect(jsonPath("$.size", is(10)))
+                .andExpect(jsonPath("$.totalElements", is(2)))
+                .andExpect(jsonPath("$.totalPages", is(1)))
+                .andExpect(jsonPath("$.last", is(true)))
+                .andExpect(jsonPath("$.content[0].vehicleNumber", is("SG-1001")));
+    }
+
+    @Test
+    @DisplayName("GET /vehicles/1 on base /vehicles mapping returns 200 OK")
+    void getVehicleById_onVehiclesRoot_returns200() throws Exception {
+        VehicleResponse response = new VehicleResponse(
+                1L, "SG-1001", "Stark Industries", "Sedan", "Tesla", "Model S", VehicleStatus.ACTIVE);
+
+        when(vehicleService.getVehicleById(1L)).thenReturn(response);
+
+        mockMvc.perform(get("/vehicles/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(1)))
+                .andExpect(jsonPath("$.vehicleNumber", is("SG-1001")));
+    }
+
+    @Test
     @DisplayName("GET /api/vehicles when empty returns 200 OK with empty array []")
     void getAllVehicles_whenEmpty_returns200WithEmptyArray() throws Exception {
         when(vehicleService.getAllVehicles()).thenReturn(List.of());

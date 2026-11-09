@@ -94,6 +94,13 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<VehicleResponse> getVehicles(org.springframework.data.domain.Pageable pageable) {
+        return vehicleRepository.findAll(pageable)
+                .map(VehicleResponse::from);
+    }
+
+    @Override
     @Transactional
     public VehicleResponse updateVehicle(Long id, UpdateVehicleRequest request) {
         if (id == null) {

@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Controller exposing authentication and registration endpoints for Stark Group VMS.
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/auth", "/api/auth"})
 public class AuthController {
 
     private final AuthService authService;

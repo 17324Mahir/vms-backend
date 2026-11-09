@@ -1,11 +1,17 @@
 package com.starkgroup.vms.controller;
 
 import com.starkgroup.vms.dto.CreateVehicleRequest;
+import com.starkgroup.vms.dto.PageResponse;
 import com.starkgroup.vms.dto.UpdateVehicleRequest;
 import com.starkgroup.vms.dto.VehicleResponse;
 import com.starkgroup.vms.service.VehicleService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +21,7 @@ import java.net.URI;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/vehicles")
+@RequestMapping({"/vehicles", "/api/vehicles"})
 @Validated
 public class VehicleController {
 
@@ -37,7 +43,29 @@ public class VehicleController {
     }
 
     @GetMapping
-    public ResponseEntity<List<VehicleResponse>> getAllVehicles() {
+    public ResponseEntity<?> getVehicles(
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size,
+            @RequestParam(name = "sortBy", defaultValue = "id") String sortBy,
+            @RequestParam(name = "sortDir", defaultValue = "asc") String sortDir,
+            HttpServletRequest request
+    ) {
+        String uri = request != null ? request.getRequestURI() : "";
+        boolean isVehiclesDirect = uri != null && (uri.equals("/vehicles") || uri.startsWith("/vehicles/"));
+
+        // If explicitly targeting /vehicles, OR client supplies pagination query parameters:
+        if (isVehiclesDirect || page != null || size != null) {
+            int pageNum = page != null ? Math.max(page, 0) : 0;
+            int pageSize = size != null ? Math.max(size, 1) : 10;
+            Sort sort = "desc".equalsIgnoreCase(sortDir)
+                    ? Sort.by(sortBy).descending()
+                    : Sort.by(sortBy).ascending();
+            Pageable pageable = PageRequest.of(pageNum, pageSize, sort);
+            Page<VehicleResponse> vehiclesPage = vehicleService.getVehicles(pageable);
+            return ResponseEntity.ok(PageResponse.from(vehiclesPage));
+        }
+
+        // Backward compatibility: Deployed frontend calling GET /api/vehicles without page params
         List<VehicleResponse> vehicles = vehicleService.getAllVehicles();
         return ResponseEntity.ok(vehicles);
     }

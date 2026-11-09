@@ -333,6 +333,27 @@ class VehicleServiceTest {
     }
 
     @Test
+    @DisplayName("Paginating vehicles returns page of mapped DTOs")
+    void getVehicles_returnsPageOfMappedDtos() {
+        List<Vehicle> list = List.of(
+                new Vehicle(1L, "SG-1001", "Stark Industries", "Sedan", "Tesla", "Model S", VehicleStatus.ACTIVE),
+                new Vehicle(2L, "SG-1002", "Stark Logistics", "Van", "Ford", "Transit", VehicleStatus.MAINTENANCE)
+        );
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        org.springframework.data.domain.Page<Vehicle> page = new org.springframework.data.domain.PageImpl<>(list, pageable, 2);
+
+        when(vehicleRepository.findAll(pageable)).thenReturn(page);
+
+        org.springframework.data.domain.Page<VehicleResponse> responses = vehicleService.getVehicles(pageable);
+
+        assertEquals(2, responses.getContent().size());
+        assertEquals(0, responses.getNumber());
+        assertEquals(10, responses.getSize());
+        assertEquals(2, responses.getTotalElements());
+        assertEquals("SG-1001", responses.getContent().get(0).vehicleNumber());
+    }
+
+    @Test
     @DisplayName("Deleting an existing vehicle deletes the record")
     void deleteVehicle_withExistingId_deletesVehicle() {
         Vehicle vehicle = new Vehicle(1L, "SG-1001", "Stark Industries", "Sedan", "Tesla", "Model S", VehicleStatus.ACTIVE);
